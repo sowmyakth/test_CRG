@@ -57,6 +57,7 @@ def save_gal(gal, psf, name_str):
 
 
 def main():
+    noise_sr = 100
     """Creates galxy and psf images with different parametrs and saves to file."""
     filter_names = ['V', 'I']
     band_name = ['f606w', 'f814w']
@@ -68,7 +69,6 @@ def main():
     #File with correlation function of noise
     noise_file = 'data/acs_filter_unrot_sci_cf.fits' 
     # file name of table image parameters
-    op_file = 'index_table_filter.fits'
     for f, filt in enumerate(filter_names):
         # Column names of table entries.
         # Names in capital are written into galsim.RealGalaxy catalog file.
@@ -113,9 +113,15 @@ def main():
                     gal_im, psf_im = get_gal_im(input_p, filter_name=band_name[f])
                     noise = galsim.getCOSMOSNoise(file_name = noise_file1,
                                                   rng=rng)
-                    gal_im.addNoise(noise)
-                    save_gal(gal_im, psf_im, name)
+                    if noise_sr:
+                        gal_im.addNoiseSNR(noise,snr=noise_sr)
+                        #output file name with snr set
+                        op_file = 'index_table_filter_snr%i.fits'%noise_sr
+                    else:
+                        gal_im.addNoise(noise)
+                        op_file = 'index_table_filter.fits'
                     name = 'images/HST_{0}_change_{1}.fits'.format(filter_names[f], count)
+                    save_gal(gal_im, psf_im, name)
                     index_table['FLUX'][count] = gal_im.array.sum()               
                     index_table['redshift'][count] = z
                     index_table['e'][count] = e_s[j]
