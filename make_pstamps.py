@@ -22,19 +22,19 @@ from astropy.io import fits
 from astropy.table import Table, Column
 import cg_fns_reloaded as cg 
 
-def get_HST_filter(filter_name='f606w'):
+def get_HST_filter(filter_name, file_path):
     """ Returns HST filter.
     @param filter_name    Name of HST optical photometric bands (f606w,f814w).
     @return               galsim.Bandpass object. 
     """
-    filter_filename = 'data/HST_{}.dat'.format(filter_name)
+    filter_filename = file_path + '/HST_{}.dat'.format(filter_name)
     filter_bandpass = galsim.Bandpass(filter_filename, wave_type='nm').thin(rel_err=1e-4)
     return filter_bandpass
 
-def get_gal_im(Args, filter_name):
+def get_gal_im(Args, filter_name, file_path):
     """Returns galsim image of psf and psf convolved galaxy."""
     Args.b_SED,Args.d_SED,Args.c_SED = cg.get_SEDs(Args)
-    Args.bp = get_HST_filter(filter_name)
+    Args.bp = get_HST_filter(filter_name, file_path)
     psf = cg.get_PSF(Args)
     gal = cg.get_gal_cg(Args)
     con = galsim.Convolve(gal,psf) 
@@ -57,17 +57,21 @@ def save_gal(gal, psf, name_str):
 
 
 def main():
-    noise_sr = 100
     """Creates galxy and psf images with different parametrs and saves to file."""
+    #Set these to required value
+    noise_snr = 100
+    path = '/nfs/slac/g/ki/ki19/deuce/AEGIS/data_test_CRG/'
+    #!!!!!!!
     filter_names = ['V', 'I']
     band_name = ['f606w', 'f814w']
     noise_mean = [-4.13E-06, -2.35E-05] #[V,I]
-    noise_var = [4.1E-06, 3.95E-06]
-    redshifts=np.linspace(0., 1.2, 15)
+    noise_var = [1E-10, 1E-10]
+    redshifts = np.linspace(0., 1.2, 15)
     # Galaxy ellipticities
-    e_s =[[0.3,0.0],[0.0, 0.3] ,[0.3/2.**0.5,0.3/2.**0.5]]
+    #e_s =[[0.3,0.0],[0.0, 0.3] ,[0.3/2.**0.5,0.3/2.**0.5]]
+    e_s=[[0.3,0.3]]
     #File with correlation function of noise
-    noise_file = 'data/acs_filter_unrot_sci_cf.fits' 
+    noise_file = path + 'data/acs_filter_unrot_sci_cf.fits' 
     # file name of table image parameters
     for f, filt in enumerate(filter_names):
         # Column names of table entries.
@@ -95,8 +99,9 @@ def main():
                 input_p  =  cg.Eu_Args(shear_est='REGAUSS', scale=0.03,
                                        bulge_e=e_s[j], disk_e=e_s[j]) 
                 input_p.redshift = z
-                name = 'images/HST_{0}_change_{1}.fits'.format(filter_names[f], count)
-                gal_im, psf_im = get_gal_im(input_p, filter_name=band_name[f])
+                name = path + 'images/HST_{0}_change_{1}.fits'.format(filter_names[f], count)
+                gal_im, psf_im = get_gal_im(input_p, filter_name=band_name[f],
+                                            file_path = path + 'data/')
                 save_gal(gal_im, psf_im, name)
                 index_table['FLUX'][count] = gal_im.array.sum()               
                 index_table['redshift'][count] = z
@@ -110,17 +115,21 @@ def main():
                     input_p  =  cg.Eu_Args(shear_est='REGAUSS', scale=0.03,
                                        bulge_e=e_s[j], disk_e=e_s[j]) 
                     input_p.redshift = z
-                    gal_im, psf_im = get_gal_im(input_p, filter_name=band_name[f])
+                    gal_im, psf_im = get_gal_im(input_p, filter_name=band_name[f],
+                                                file_path = path + 'data/')
                     noise = galsim.getCOSMOSNoise(file_name = noise_file1,
                                                   rng=rng)
-                    if noise_sr:
-                        gal_im.addNoiseSNR(noise,snr=noise_sr)
+                    if noise_snr:                        
+                        var = gal_im.addNoiseSNR(noise,snr=noise_snr)
+                        index_table['NOISE_VARIANCE'][count] = var
                         #output file name with snr set
-                        op_file = 'index_table_filter_snr%i.fits'%noise_sr
+                        op_file = 'index_table_filter_snr%i.fits'%noise_snr
                     else:
                         gal_im.addNoise(noise)
+                        index_table['NOISE_VARIANCE'][count] = noise.getVariance()
                         op_file = 'index_table_filter.fits'
-                    name = 'images/HST_{0}_change_{1}.fits'.format(filter_names[f], count)
+                    name = path + 'images/HST_{0}_change_{1}.fits'.format(filter_names[f],
+                                                                          count)
                     save_gal(gal_im, psf_im, name)
                     index_table['FLUX'][count] = gal_im.array.sum()               
                     index_table['redshift'][count] = z
@@ -130,7 +139,7 @@ def main():
                     if index_table['NUMBER'][count] != count:
                         raise ValueError('index numbers don\'t match')
                     count+=1
-        index_table.write(op_file.replace('filter', filt), format='fits',
+        index_table.write(path + op_file.replace('filter', filt), format='fits',
                                           overwrite=True)
 
 if __name__ == "__main__":
