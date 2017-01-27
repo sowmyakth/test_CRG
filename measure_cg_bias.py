@@ -13,14 +13,13 @@ def get_LSST_filter(filter_name, file_path):
     filter_bandpass = galsim.Bandpass(filter_filename, wave_type='nm').thin(rel_err=1e-4)
     return filter_bandpass
 
-def get_SEDs(redshift):
+def get_SEDs(redshift, file_path):
     """Returns the bulge (E) and disk (Irr) SED that was used in creating the
     parameric galaxies.
     """
-    datapath = '/Users/choyma/work/test_cge/make_param_gal/data/'
-    b_SED = galsim.SED(datapath+"CWW_{}_ext.sed".format('E'), 
+    b_SED = galsim.SED(file_path+"CWW_{}_ext.sed".format('E'), 
                        wave_type='Ang', flux_type= 'flambda')
-    d_SED = galsim.SED(datapath+"CWW_{}_ext.sed".format('Im'), 
+    d_SED = galsim.SED(file_path+"CWW_{}_ext.sed".format('Im'), 
                        wave_type='Ang', flux_type= 'flambda')
     b_SED = b_SED.withFluxDensity(1.0, 550.0).atRedshift(redshift)
     d_SED = d_SED.withFluxDensity(1.0, 550.0).atRedshift(redshift)
@@ -29,17 +28,26 @@ def get_SEDs(redshift):
 def main():
     # set to True if true seds are to given as input seds to crg.
     # else default setting uses polynomial seds 
-    assert_true_seds =True
+    assert_true_seds = True #False #True
+    noise_snr = 100
+    path = '/nfs/slac/g/ki/ki19/deuce/AEGIS/data_test_CRG/'
+    dir_name = '/nfs/slac/g/ki/ki19/deuce/AEGIS/data_test_CRG/catalog/' 
+    data_path = '/nfs/slac/g/ki/ki19/deuce/AEGIS/data_test_CRG/data/'
     filters=['f606w', 'f814w']
     file_filter_name = ['V', 'I']
     rgc = {}
     for f, filt in enumerate(filters):
         cat_name = 'HST_filter_catalog.fits'.replace('filter', file_filter_name[f])
-        rgc[filt] = galsim.RealGalaxyCatalog(cat_name, dir=os.getcwd()+'/catalog/')
+        rgc[filt] = galsim.RealGalaxyCatalog(cat_name, dir=dir_name)
     v606 = rgc['f606w'].getBandpass()
     i814 = rgc['f814w'].getBandpass()
-    path = '/Users/choyma/work/test_cge/make_param_gal/data/'
-    in_file = 'index_table_filter.fits'.replace('filter', file_filter_name[0])
+    if noise_snr:
+        in_file = 'index_table_filter_snr%i.fits'%noise_snr
+        out_file = 'results_r_cg_bias_all_z_snr%i.fits'%noise_snr
+    else:
+        in_file = 'index_table_filter.fits'
+        out_file = 'results_r_cg_bias_all_z.fits'
+    in_file = path +  in_file.replace('filter', file_filter_name[0])
     index_table = Table.read(in_file)
     
     #CHANGE!!!!!!
@@ -64,18 +72,20 @@ def main():
         print "Running Galaxy Index: ", indx
         if assert_true_seds is True:
             print "True SEDs are input to CRG"
-            b_SED, d_SED = get_SEDs(index_table['redshift'][indx])
+            b_SED, d_SED = get_SEDs(index_table['redshift'][indx],
+                                    file_path=data_path)
             crg = galsim.ChromaticRealGalaxy([rgc['f606w'], rgc['f814w']], index=indx,
                                             SEDs=[b_SED, d_SED])
-            out_file = 'results_r_cg_bias_all_z_true_sed.fits'
+            out_file = out_file[0:-5] +'_true_sed.fits'
             print "output to be saved at ", out_file
         else:
             crg = galsim.ChromaticRealGalaxy([rgc['f606w'], rgc['f814w']], index=indx)
-            out_file = 'results_r_cg_bias_all_z.fits'
+            
             print "output to be saved at ", out_file
         meas_args = cgr.meas_args(rt_g=[[0.005,0.005],[0.01,0.01]])
         psf_args = cgr.psf_params()
-        meas_args.bp = get_LSST_filter(filter_name='r', file_path=path)
+        meas_args.bp = get_LSST_filter(filter_name='r',
+                                       file_path=data_path)
         gcg, gnocg = cgr.calc_cg_crg(crg, meas_args, psf_args)
         print gcg
         gtrue = np.array(meas_args.rt_g)

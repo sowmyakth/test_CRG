@@ -14,14 +14,14 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table,Column, vstack, hstack, join
 
-def get_images(index_table, filt):
+def get_images(index_table, filt, path):
     """Make fits files of galaxy and psf postage stamps.
     Each fits file has 100 images with different HDU.
     """
     print "Saving images"
     num = index_table['NUMBER']
     file_nums = np.array(num)/100 + 1
-    print "Making %f fits files with galaxy stamps "%max(file_nums)
+    print "Making %i fits files with galaxy stamps "%max(file_nums)
     col = Column(file_nums, name='file_num')
     index_table.add_column(col)
     col = Column(np.zeros(len(num)), name='HDU')
@@ -34,13 +34,13 @@ def get_images(index_table, filt):
         val, = np.where(index_table['file_num']== j)
         im_hdul = fits.HDUList()
         psf_hdul = fits.HDUList()
-        im_name = 'catalog/HST_filt_gal_n{0}.fits'.format(j).replace('filt', filt)
-        psf_name = 'catalog/HST_filt_psf_n{0}.fits'.format(j).replace('filt', filt)
+        im_name = path + 'catalog/HST_filt_gal_n{0}.fits'.format(j).replace('filt', filt)
+        psf_name = path + 'catalog/HST_filt_psf_n{0}.fits'.format(j).replace('filt', filt)
         hdu_count = 0
         for i in val:
             #input galaxy and psf images
-            im_file = 'images/HST_filt_gal_{0}.fits'.format(i).replace('filt', filt)
-            psf_file =  'images/HST_filt_psf_{0}.fits'.format(i).replace('filt', filt)
+            im_file = path + 'images/HST_filt_gal_{0}.fits'.format(i).replace('filt', filt)
+            psf_file = path + 'images/HST_filt_psf_{0}.fits'.format(i).replace('filt', filt)
             print im_file, i
             h = fits.open(im_file)
             im = h[0].data
@@ -54,17 +54,16 @@ def get_images(index_table, filt):
             index_table['GAL_FILENAME'][i] = 'HST_filt_gal_n{0}.fits'.format(j).replace('filt', filt)
             index_table['PSF_FILENAME'][i] = 'HST_filt_psf_n{0}.fits'.format(j).replace('filt', filt)
             hdu_count+=1
-        #output fits file name
-
         im_hdul.writeto(im_name, clobber=True)
         psf_hdul.writeto(psf_name, clobber=True)
     return index_table
 
-def get_main_catalog(index_table, filt, band_name):
+def get_main_catalog(index_table, filt,
+                     band_name, path):
     """Makes main catalog containing information on all galaxies.
     Columns are identical to COSMOS Real Galaxy catalog"""
     print "Creating main catalog"
-    cat_name = 'catalog/HST_filt_catalog.fits' 
+    cat_name = path + 'catalog/HST_filt_catalog.fits' 
     noise_file = 'acs_filt_unrot_sci_cf.fits' 
     num = index_table['NUMBER']
     names = ('IDENT', 'RA', 'DEC', 'MAG', 'BAND', 'WEIGHT', 'GAL_FILENAME')
@@ -73,7 +72,6 @@ def get_main_catalog(index_table, filt, band_name):
     dtype = ('i4', 'f8', 'f8', 'f8', 'S40', 'f8', 'S256')
     dtype+= ('S288', 'i4', 'i4', 'f8')
     dtype+= ('f8', 'f8', 'S208', 'f8')
-
     num = index_table['NUMBER']
     im_names =[]
     psf_names = []
@@ -95,14 +93,17 @@ def get_main_catalog(index_table, filt, band_name):
 def main():
     """Saves Postage stamps and final catalogs in a format that can be read by
     galsim modules"""
+    path = '/nfs/slac/g/ki/ki19/deuce/AEGIS/data_test_CRG/'
+    in_file = path + 'index_table_filter_snr100.fits'
+    #in_file = path + 'index_table_filter.fits'
     filter_names = ['V', 'I']
     band_name = ['F606W', 'F814W']
     #read input catalog with galaxy parameters
-    in_file = 'index_table_filter.fits'
     for f, filt in enumerate(filter_names):
         index_table = Table.read(in_file.replace('filter',filt), format='fits')
-        idx = get_images(index_table, filt)
-        get_main_catalog(idx, filt, band_name[f])
+        idx = get_images(index_table, filt, path=path)
+        get_main_catalog(idx, filt,
+                         band_name[f], path=path)
 
 if __name__== "__main__":
     main()
